@@ -72,7 +72,7 @@ app.get('/getUserRepos', async function (req, res) {
         method: "GET",
         headers: {
             "Accept": "application/vnd.github+json",
-            "Authorization": `Bearer ${token}`,
+            "Authorization": `Bearer ${req.query.token}`,
             "X-GitHub-Api-Version": "2022-11-28"
         }
     }).then((response) => {
