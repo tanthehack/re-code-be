@@ -68,7 +68,7 @@ app.get('/getAccessToken', async function (req, res) {
 
 app.get('/getUserRepos', async function (req, res) {
     req.query.token;
-    await fetch("https://api.github.com/user/repos", {
+    await fetch("https://api.github.com/installation/repositories", {
         method: "GET",
         headers: {
             "Accept": "application/vnd.github+json",
