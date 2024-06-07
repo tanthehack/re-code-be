@@ -3,41 +3,46 @@ const cors = require('cors');
 const fetch = (...args) =>
     import('node-fetch').then(({ default: fetch }) => fetch(...args));
 const bodyParser = require('body-parser');
+const jwt = require('jsonwebtoken')
 require('dotenv').config()
+const fs = require('fs');
 
 const app = express();
 
 app.use(cors());
 app.use(bodyParser.json());
 
-//GH - Get Access Token
-app.get('/getAccessToken', async function (req, res) {
-    req.query.code;
-    await fetch(`https://github.com/login/oauth/access_token?client_id=${process.env.CLIENT_ID}&client_secret=${process.env.CLIENT_SECRET}&code=${req.query.code}`, {
-        method: "POST",
+function createJWT() {
+    const payload = {
+        //issued at time, 60 seconds in the past to allow for clock drift
+        iat: Math.floor(Date.now() / 1000) - 60,
+
+        //JWT expiration time (10 minute maximum)
+        exp: Math.floor(Date.now() / 1000) + (10 * 60),
+
+        //GitHub App's client ID
+        iss: process.env.CLIENT_ID
+    }
+
+    const pvKey = fs.readFileSync('./secrets/pv-key.pem', 'utf8')
+    const encoded_jwt = jwt.sign(payload, pvKey, { algorithm: 'RS256' })
+
+    return encoded_jwt;
+}
+
+app.get('/authRecode', async function (req, res) {
+    const jwt = createJWT();
+
+    await fetch(`https://api.github.com/app/installations`, {
+        method: "GET",
         headers: {
-            "Accept": "application/json"
+            "Accept": "application/vnd.github+json",
+            "Authorization": `Bearer ${jwt}`,
+            "X-GitHub-Api-Version": "2022-11-28"
         }
     }).then((response) => {
         return response.json();
     }).then((data) => {
-        console.log(data);
-        res.json(data);
-    });
-});
-
-//GH - Get user data
-app.get('/getUserData', async function (req, res) {
-    req.get("Authorization");
-    await fetch("https://api.githum.com/user", {
-        method: "GET",
-        headers: {
-            "Authorization": req.get("Authorization")
-        }
-    }).then((response) => {
-        return response.json()
-    }).then((data) => {
-        console.log(data);
         res.json(data);
     })
 })
