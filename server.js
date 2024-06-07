@@ -32,6 +32,7 @@ function createJWT() {
 
 app.get('/authRecode', async function (req, res) {
     const jwt = createJWT();
+    req.get("Authorization");
 
     await fetch(`https://api.github.com/app/installations`, {
         method: "GET",
