@@ -30,23 +30,23 @@ function createJWT() {
     return encoded_jwt;
 }
 
-// app.get('/getAccessToken', async function (req, res) {
-//     req.get("Authorization");
-//     const jwt = createJWT();
+app.get('/getInstallations', async function (req, res) {
+    req.get("Authorization");
+    const jwt = createJWT();
 
-//     await fetch(`https://api.github.com/app/installations`, {
-//         method: "GET",
-//         headers: {
-//             "Accept": "application/vnd.github+json",
-//             "Authorization": `Bearer ${jwt}`,
-//             "X-GitHub-Api-Version": "2022-11-28"
-//         }
-//     }).then((response) => {
-//         return response.json();
-//     }).then((data) => {
-//         res.json(data);
-//     })
-// })
+    await fetch(`https://api.github.com/app/installations`, {
+        method: "GET",
+        headers: {
+            "Accept": "application/vnd.github+json",
+            "Authorization": `Bearer ${jwt}`,
+            "X-GitHub-Api-Version": "2022-11-28"
+        }
+    }).then((response) => {
+        return response.json();
+    }).then((data) => {
+        res.json(data);
+    })
+})
 
 app.get('/getAccessToken', async function (req, res) {
     req.query.id;
