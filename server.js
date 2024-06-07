@@ -66,6 +66,23 @@ app.get('/getAccessToken', async function (req, res) {
     });
 });
 
+app.get('/getUserRepos', async function (req, res) {
+    req.query.token;
+    await fetch("https://api.github.com/user/repos", {
+        method: "GET",
+        headers: {
+            "Accept": "application/vnd.github+json",
+            "Authorization": `Bearer ${token}`,
+            "X-GitHub-Api-Version": "2022-11-28"
+        }
+    }).then((response) => {
+        return response.json()
+    }).then((data) => {
+        console.log(data);
+        res.json(data);
+    })
+})
+
 app.listen(4000, function () {
     console.log("Server sunning on port 4000");
 })
