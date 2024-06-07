@@ -30,12 +30,29 @@ function createJWT() {
     return encoded_jwt;
 }
 
-app.get('/getAuthRecode', async function (req, res) {
-    req.get("Authorization");
-    const jwt = createJWT();
+// app.get('/getAccessToken', async function (req, res) {
+//     req.get("Authorization");
+//     const jwt = createJWT();
 
-    await fetch(`https://api.github.com/app/installations`, {
-        method: "GET",
+//     await fetch(`https://api.github.com/app/installations`, {
+//         method: "GET",
+//         headers: {
+//             "Accept": "application/vnd.github+json",
+//             "Authorization": `Bearer ${jwt}`,
+//             "X-GitHub-Api-Version": "2022-11-28"
+//         }
+//     }).then((response) => {
+//         return response.json();
+//     }).then((data) => {
+//         res.json(data);
+//     })
+// })
+
+app.get('/getAccessToken', async function (req, res) {
+    req.query.id;
+    const jwt = createJWT();
+    await fetch(`https://api.github.com/app/installations/${req.query.id}/access_tokens`, {
+        method: "POST",
         headers: {
             "Accept": "application/vnd.github+json",
             "Authorization": `Bearer ${jwt}`,
@@ -44,9 +61,10 @@ app.get('/getAuthRecode', async function (req, res) {
     }).then((response) => {
         return response.json();
     }).then((data) => {
+        console.log(data);
         res.json(data);
-    })
-})
+    });
+});
 
 app.listen(4000, function () {
     console.log("Server sunning on port 4000");
