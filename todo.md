@@ -1,0 +1,9 @@
+- [ ] Github login
+- [ ] Getting the source code from the frontend
+- [ ] Check if the code is "clean"
+- [ ] Lint the code
+- [ ] Generate llm prompt
+- [ ] send llm prompt
+- [ ] recieve llm status, and responses
+- [ ] prepare the responses for the fe
+- [ ] send the responses
