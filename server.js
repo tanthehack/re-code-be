@@ -24,7 +24,7 @@ function createJWT() {
         iss: process.env.CLIENT_ID
     }
 
-    const pvKey = fs.readFileSync('./secrets/pv-key.pem', 'utf8')
+    const pvKey = fs.readFileSync('./etc/secrets/pv-key.pem', 'utf8')
     const encoded_jwt = jwt.sign(payload, pvKey, { algorithm: 'RS256' })
 
     return encoded_jwt;
