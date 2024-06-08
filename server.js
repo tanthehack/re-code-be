@@ -30,6 +30,12 @@ function createJWT() {
     return encoded_jwt;
 }
 
+function getToken(header) {
+    if (header.includes("Bearer"))
+        return header.substring(7, header.length).trim();
+    return null
+}
+
 app.get('/getInstallations', async function (req, res) {
     req.get("Authorization");
     const jwt = createJWT();
@@ -66,21 +72,49 @@ app.get('/getAccessToken', async function (req, res) {
     });
 });
 
+//page and limit
 app.get('/getUserRepos', async function (req, res) {
-    req.query.token;
-    await fetch("https://api.github.com/installation/repositories", {
-        method: "GET",
-        headers: {
-            "Accept": "application/vnd.github+json",
-            "Authorization": `Bearer ${req.query.token}`,
-            "X-GitHub-Api-Version": "2022-11-28"
+    // const page = req.query.page;
+    // const limit = req.query.limit;
+
+    // const startIndex = (page - 1) * limit;
+    // const endIndex = page * limit
+
+    const authHeader = req.get("Authorization");
+    if (!authHeader) {
+        return res.status(400).json({ error: "Authorization header is required" });
+    }
+
+    const token = getToken(authHeader);
+    if (!token) {
+        return res.status(401).json({ error: "Invalid token" });
+    }
+
+    try {
+        const response = await fetch("https://api.github.com/installation/repositories", {
+            method: "GET",
+            headers: {
+                "Accept": "application/vnd.github+json",
+                "Authorization": `Bearer ${token}`,
+                "X-GitHub-Api-Version": "2022-11-28"
+            }
+        })
+
+        if (response.status === 401) {
+            return res.status(401).json({ error: "Unauthorized: Invalid or expired token" });
+        } else if (response.status === 403) {
+            return res.status(403).json({ error: "Forbidden: Access denied" });
+        } else if (!response.ok) {
+            return res.status(response.status).json({ error: `Error: ${response.statusText}` });
         }
-    }).then((response) => {
-        return response.json()
-    }).then((data) => {
-        console.log(data);
+
+        const data = await response.json();
+        console.log("the data", data);
         res.json(data);
-    })
+    } catch (error) {
+        console.error("Error fetching data from GitHub API:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
 })
 
 app.listen(4000, function () {
