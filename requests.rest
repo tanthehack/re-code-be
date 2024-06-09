@@ -1,2 +1,0 @@
-GET http://localhost:4000/getUserRepos
-Authorization: `Bearer ghs_y7aM1ucGFTC0aqRunobCtm21D1jJRb2EHMTu`,
