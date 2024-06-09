@@ -67,7 +67,6 @@ app.get('/getAccessToken', async function (req, res) {
     }).then((response) => {
         return response.json();
     }).then((data) => {
-        console.log(data);
         res.json(data);
     });
 });
@@ -102,7 +101,6 @@ app.get('/getUserRepos', async function (req, res) {
         }
 
         const data = await response.json();
-        console.log("the data", data);
         res.json(data);
     } catch (error) {
         console.error("Error fetching data from GitHub API:", error);
