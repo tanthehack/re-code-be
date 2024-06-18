@@ -1,7 +1,7 @@
-- [ ] Github login
+- [x] Github login
 - [ ] Getting the source code from the frontend
 - [ ] Check if the code is "clean"
-- [ ] Lint the code
+- [x] Lint the code
 - [ ] Generate llm prompt
 - [ ] send llm prompt
 - [ ] recieve llm status, and responses
