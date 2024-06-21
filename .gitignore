@@ -6,3 +6,5 @@ etc
 notes.md
 rocket-3b.Q5_K_M.llamafile
 rocket-3b.Q6_K.llamafile
+.venv
+codellama-7b.Q5_K_M.gguf

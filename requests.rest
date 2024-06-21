@@ -1,0 +1,4 @@
+GET http://localhost:4000/getCode?owner=tanthehack&repo=jsbadcode
+Authorization: `Bearer ghs_LAiM5bsBxkwbKGEzIbRpLW0lAg6Wc809G3NE
+
+# GET http://localhost:4000/getAccessToken?id=52075922

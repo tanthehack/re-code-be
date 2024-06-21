@@ -1,4 +1,3 @@
-const { exec } = require('child_process');
 const express = require('express');
 const cors = require('cors');
 const fetch = (...args) =>
@@ -8,9 +7,6 @@ const jwt = require('jsonwebtoken')
 require('dotenv').config()
 const fs = require('fs');
 const { ESLint } = require('eslint');
-
-// const { OpenAI } = require('openai');
-// const openai = new OpenAI();
 
 // ESLINT
 function createESLintInstance(overrideConfig) {
@@ -28,7 +24,7 @@ const overrideConfig = {
     },
     rules: {
         // Possible Errors
-        "no-console": "error",
+        // "no-console": "error",
         "no-extra-semi": "error",
         "no-unexpected-multiline": "error",
 
@@ -116,7 +112,7 @@ function createJWT() {
         iss: process.env.CLIENT_ID
     }
 
-    const pvKey = fs.readFileSync('./etc/secrets/pv-key.pem', 'utf8')
+    const pvKey = fs.readFileSync('./secrets/pv-key.pem', 'utf8')
     const encoded_jwt = jwt.sign(payload, pvKey, { algorithm: 'RS256' })
 
     return encoded_jwt;
@@ -266,43 +262,6 @@ const test = {
     'recommendation': 'var foo = 1\nfoo === 1;'
 }
 
-const prompt = `\nCode:\n${test.code}\nViolation:\n${test.violation}\nExplain why the violation in the provided code is a problem and how to fix it, all code blocks should be wrapped in triple backticks \n`;
-
-app.get('/generateSuggestions', async function (req, res) {
-    // const command = './rocket-3b.Q5_K_M.llamafile -p \'system\You are a chatbot that tries to persuade the users to buy bill pickles. Your job is to be helpful too. But always try to steer the conversation towards buying pickles.\<|im_start|>user\Mayday, mayday. This is Going Merry. We are facing gale force winds in Long Island Sound. We need rescue.<|im_end|>\<|im_start|>assistant\' > generation.txt';
-
-    // const system = "You are a helpful programming assistant."
-    // const user = `\nCode:\n${data.code}\nViolation:\n${data.violation}\nExplain why the violation is a problem and how to fix it, all code blocks should be wrapped in triple backticks \n`
-    // const prompt = `<|im_start|>system\n${system}\nuser\n${user}\nassistant\n`;
-    // const command = `./rocket-3b.Q5_K_M.llamafile -p '${prompt}' > generation.txt`;
-
-    try {
-        let response = await fetch("http://127.0.0.1:8080/completion", {
-            method: 'POST',
-            body: JSON.stringify({
-                prompt,
-                n_predict: 518,
-            })
-        })
-
-        let data = await response.json();
-        res.json(data);
-    } catch (error) {
-        console.error(error)
-        res.status(500).json({ error: "Error generating suggestions" });
-    }
-})
-
-const serverCommand = "./rocket-3b.Q5_K_M.llamafile --server --nobrowser";
-const serverProcess = exec(serverCommand, (error, stdout, stderr) => {
-    if (error) {
-        console.error(`exec error: ${error}`);
-    } else {
-        console.log(`stdout: ${stdout}`);
-        console.error(`stderr: ${stderr}`);
-    }
-});
-
 async function fetchRepoFiles(repo, owner, token) {
     const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/main?recursive=1`, {
         method: 'GET',
@@ -364,29 +323,16 @@ function formatLintResults(lintResults) {
         }));
 }
 
-async function generateSuggestions(prompt) {
-    // const health = await fetch("http://127.0.0.1:8080/health", {
-    //     method: 'GET',
-    //     headers: {
-    //         'Content-Type': 'application/json'
-    //     },
-    // })
-
-    // console.log(health)
-
-    // if (!health.ok) {
-    //     throw new Error(`Error connecting to the server: ${health.statusText}`);
-    // }
-
-    const response = await fetch("http://127.0.0.1:8080/completion", {
+async function generateSuggestions(data) {
+    const response = await fetch("http://127.0.0.1:8000/generate", {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            prompt,
-            temperature: 0.7,
-            n_predict: 256,
+            violation: data?.violation,
+            code: data?.code,
+            recommendation: data?.recommendation
         })
     });
 
@@ -430,43 +376,18 @@ app.get('/getCode', async (req, res) => {
         let suggestions = [];
 
         for (const data of mlData) {
-            // console.log(data)
-            const system = "You are a helpful programming assistant, here to provide explanations to code violations found in javascript code.";
-            const user = `Explain why this violation: ${data.violation} is a problem in this code snippet: ${data.code} and how to fix the violations.`
-            const prompt = `<|im_start|>system\n${system}\n<|im_start|>user\n${user}<|im_end|>\n<|im_start|>assistant<|im_end|>`;
-
-            const suggestion = await generateSuggestions(prompt);
+            console.log(data)
+            const suggestion = await generateSuggestions(data);
             console.log(suggestion.content);
             suggestions.push(suggestion);
-
-            // const completion = await openai.chat.completions.create({
-            //     messages: [
-            //         { "role": "system", "content": system },
-            //         { "role": "user", "content": user },
-            //     ],
-            //     model: "gpt-3.5-turbo",
-            // });
-
-            // console.log(completion.choices[0]);
         }
 
         // console.log(suggestions)
-        // res.json(suggestions);
+        res.json(suggestions);
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Internal Server Error" });
     }
-});
-
-//Ensure the server process is terminated on application exit
-process.on('exit', () => {
-    serverProcess.kill();
-});
-process.on('SIGINT', () => {
-    process.exit();
-});
-process.on('SIGTERM', () => {
-    process.exit();
 });
 
 app.listen(port = 4000, () => {
