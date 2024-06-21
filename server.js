@@ -9,6 +9,10 @@ require('dotenv').config()
 const fs = require('fs');
 const { ESLint } = require('eslint');
 
+// const { OpenAI } = require('openai');
+// const openai = new OpenAI();
+
+// ESLINT
 function createESLintInstance(overrideConfig) {
     return new ESLint({
         overrideConfigFile: true,
@@ -24,7 +28,7 @@ const overrideConfig = {
     },
     rules: {
         // Possible Errors
-        // "no-console": "error",
+        "no-console": "error",
         "no-extra-semi": "error",
         "no-unexpected-multiline": "error",
 
@@ -256,49 +260,38 @@ app.post('/importCode', async function (req, res) {
     }
 })
 
-// const prompt = `Building a website can be done in 10 simple steps:`;
+const test = {
+    'code': 'var foo = 1\nfoo == 1;',
+    'violation': 'Use === instead of ==',
+    'recommendation': 'var foo = 1\nfoo === 1;'
+}
 
-// app.get('/generateSuggestions', async function (req, res) {
-//     // const command = './rocket-3b.Q5_K_M.llamafile -p \'system\You are a chatbot that tries to persuade the users to buy bill pickles. Your job is to be helpful too. But always try to steer the conversation towards buying pickles.\<|im_start|>user\Mayday, mayday. This is Going Merry. We are facing gale force winds in Long Island Sound. We need rescue.<|im_end|>\<|im_start|>assistant\' > generation.txt';
+const prompt = `\nCode:\n${test.code}\nViolation:\n${test.violation}\nExplain why the violation in the provided code is a problem and how to fix it, all code blocks should be wrapped in triple backticks \n`;
 
-//     // const system = "You are a helpful programming assistant."
-//     // const user = `\nCode:\n${data.code}\nViolation:\n${data.violation}\nExplain why the violation is a problem and how to fix it, all code blocks should be wrapped in triple backticks \n`
-//     // const prompt = `<|im_start|>system\n${system}\nuser\n${user}\nassistant\n`;
-//     // const command = `./rocket-3b.Q5_K_M.llamafile -p '${prompt}' > generation.txt`;
+app.get('/generateSuggestions', async function (req, res) {
+    // const command = './rocket-3b.Q5_K_M.llamafile -p \'system\You are a chatbot that tries to persuade the users to buy bill pickles. Your job is to be helpful too. But always try to steer the conversation towards buying pickles.\<|im_start|>user\Mayday, mayday. This is Going Merry. We are facing gale force winds in Long Island Sound. We need rescue.<|im_end|>\<|im_start|>assistant\' > generation.txt';
 
-//     const command = "./rocket-3b.Q5_K_M.llamafile --server --nobrowser"
+    // const system = "You are a helpful programming assistant."
+    // const user = `\nCode:\n${data.code}\nViolation:\n${data.violation}\nExplain why the violation is a problem and how to fix it, all code blocks should be wrapped in triple backticks \n`
+    // const prompt = `<|im_start|>system\n${system}\nuser\n${user}\nassistant\n`;
+    // const command = `./rocket-3b.Q5_K_M.llamafile -p '${prompt}' > generation.txt`;
 
-//     try {
-//         exec(command, async (error, stdout, stderr) => {
-//             if (error) {
-//                 console.error(`exec error: ${error}`);
-//                 res.status(500).json({ error: "Error generating suggestions" });
-//                 return;
-//             }
-//             console.log(`stdout: ${stdout}`);
-//             console.error(`stderr: ${stderr}`);
-//         });
-//     } catch (error) {
-//         console.error(error)
-//         res.status(500).json({ error: "Error generating suggestions" });
-//     }
+    try {
+        let response = await fetch("http://127.0.0.1:8080/completion", {
+            method: 'POST',
+            body: JSON.stringify({
+                prompt,
+                n_predict: 518,
+            })
+        })
 
-//     try {
-//         let response = await fetch("http://127.0.0.1:8080/completion", {
-//             method: 'POST',
-//             body: JSON.stringify({
-//                 prompt,
-//                 n_predict: 512,
-//             })
-//         })
-
-//         let data = await response.json();
-//         res.json(data);
-//     } catch (error) {
-//         console.error(error)
-//         res.status(500).json({ error: "Error generating suggestions" });
-//     }
-// })
+        let data = await response.json();
+        res.json(data);
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({ error: "Error generating suggestions" });
+    }
+})
 
 const serverCommand = "./rocket-3b.Q5_K_M.llamafile --server --nobrowser";
 const serverProcess = exec(serverCommand, (error, stdout, stderr) => {
@@ -310,9 +303,101 @@ const serverProcess = exec(serverCommand, (error, stdout, stderr) => {
     }
 });
 
-let prompt = `Building a website can be done in 10 simple steps:`;
+async function fetchRepoFiles(repo, owner, token) {
+    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/main?recursive=1`, {
+        method: 'GET',
+        headers: {
+            "Accept": "application/vnd.github+json",
+            "Authorization": `Bearer ${token}`,
+            "X-GitHub-Api-Version": "2022-11-28"
+        }
+    });
 
-app.get('/getCode', async function getCode(req, res) {
+    if (!response.ok) {
+        throw new Error(`Error fetching repo files: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.tree.filter(file => file.path.endsWith(".js"));
+}
+
+async function fetchFileContent(url, token) {
+    const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+            "Accept": "application/vnd.github+json",
+            "Authorization": `Bearer ${token}`,
+            "X-GitHub-Api-Version": "2022-11-28"
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Error fetching file content: ${response.statusText}`);
+    }
+
+    const fileData = await response.json();
+    return Buffer.from(fileData.content, 'base64').toString('utf-8');
+}
+
+async function lintFiles(fileContents) {
+    const results = [];
+    for (const file of fileContents) {
+        const lintResult = await eslint.lintText(file.content, { filePath: file.path });
+        results.push(lintResult[0]);
+    }
+    return results;
+}
+
+function formatLintResults(lintResults) {
+    return lintResults
+        .filter(result => result.messages.length > 0)
+        .map(result => ({
+            filePath: result.filePath,
+            messages: result.messages.map(message => ({
+                source: result.source ?? result.output,
+                violation: message.message,
+                ruleId: message.ruleId,
+                line: message.line,
+                column: message.column,
+                suggestion: message.fix ? message.fix.text : null
+            }))
+        }));
+}
+
+async function generateSuggestions(prompt) {
+    // const health = await fetch("http://127.0.0.1:8080/health", {
+    //     method: 'GET',
+    //     headers: {
+    //         'Content-Type': 'application/json'
+    //     },
+    // })
+
+    // console.log(health)
+
+    // if (!health.ok) {
+    //     throw new Error(`Error connecting to the server: ${health.statusText}`);
+    // }
+
+    const response = await fetch("http://127.0.0.1:8080/completion", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            prompt,
+            temperature: 0.7,
+            n_predict: 256,
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error(`Error generating suggestions: ${response.statusText}`);
+    }
+
+    return response.json();
+}
+
+app.get('/getCode', async (req, res) => {
     const authHeader = req.get("Authorization");
     if (!authHeader) {
         return res.status(400).json({ error: "Authorization header is required" });
@@ -323,140 +408,57 @@ app.get('/getCode', async function getCode(req, res) {
         return res.status(401).json({ error: "Invalid token" });
     }
 
-    const body = req.query;
-    const { repo, owner } = body;
-
-    console.log(repo, owner);
-
+    const { repo, owner } = req.query;
     if (!repo || !owner) {
         return res.status(400).json({ error: "The repo name and owner name are required!" });
     }
 
     try {
-        let response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/main?recursive=1`, {
-            method: 'GET',
-            headers: {
-                "Accept": "application/vnd.github+json",
-                "Authorization": `Bearer ${token}`,
-                "X-GitHub-Api-Version": "2022-11-28"
+        const files = await fetchRepoFiles(repo, owner, token);
+        const fileContents = await Promise.all(files.map(file => fetchFileContent(file.url, token).then(content => ({ path: file.path, content }))));
+
+        const lintResults = await lintFiles(fileContents);
+        const serializedData = formatLintResults(lintResults);
+        const mlData = serializedData.map(data => {
+            return {
+                code: data.messages[0].source,
+                violation: data.messages[0].violation,
+                recommendation: data.messages[0].suggestion
             }
         });
 
-        if (response.status === 401) {
-            console.error("Unauthorized: Invalid or expired token");
-            return res.status(401).json({ error: "Unauthorized: Invalid or expired token" });
-        } else if (response.status === 403) {
-            console.error("Forbidden: Access denied");
-            return res.status(403).json({ error: "Forbidden: Access denied" });
-        } else if (!response.ok) {
-            console.error(`Error: ${response.statusText}`);
-            return res.status(response.status).json({ error: `Error: ${response.statusText}` });
+        let suggestions = [];
+
+        for (const data of mlData) {
+            // console.log(data)
+            const system = "You are a helpful programming assistant, here to provide explanations to code violations found in javascript code.";
+            const user = `Explain why this violation: ${data.violation} is a problem in this code snippet: ${data.code} and how to fix the violations.`
+            const prompt = `<|im_start|>system\n${system}\n<|im_start|>user\n${user}<|im_end|>\n<|im_start|>assistant<|im_end|>`;
+
+            const suggestion = await generateSuggestions(prompt);
+            console.log(suggestion.content);
+            suggestions.push(suggestion);
+
+            // const completion = await openai.chat.completions.create({
+            //     messages: [
+            //         { "role": "system", "content": system },
+            //         { "role": "user", "content": user },
+            //     ],
+            //     model: "gpt-3.5-turbo",
+            // });
+
+            // console.log(completion.choices[0]);
         }
 
-        let data;
-        try {
-            data = await response.json();
-        } catch (jsonError) {
-            console.error("Invalid JSON response", jsonError);
-            return res.status(502).json({ error: "Bad Gateway: Invalid JSON response from API" });
-        }
-
-        const jsFiles = data.tree.filter(file => file.path.endsWith(".js"));
-        const fileContents = [];
-        for (const file of jsFiles) {
-            const response = await fetch(file.url, {
-                method: 'GET',
-                headers: {
-                    "Accept": "application/vnd.github+json",
-                    "Authorization": `Bearer ${token}`,
-                    "X-GitHub-Api-Version": "2022-11-28"
-                }
-            });
-            if (response.status === 200) {
-                const fileData = await response.json();
-                const content = Buffer.from(fileData.content, 'base64').toString('utf-8');
-                fileContents.push({ path: file.path, content });
-            }
-        }
-
-        const lintFiles = async (fileContents) => {
-            const results = {};
-
-            for (const file of fileContents) {
-                const filePath = file.path;
-                const fileContent = file.content;
-
-                const lintResult = await eslint.lintText(fileContent, {
-                    filePath,
-                });
-
-                results[filePath] = lintResult;
-            }
-
-            return [results];
-        };
-
-        let lintResults = await lintFiles(fileContents);
-        // res.json(lintResults);
-
-        const filteredResults = lintResults.filter(result => {
-            const filePath = result.filePath;
-            const messages = result.messages;
-            console.log(filePath, messages);
-            return messages && messages.length > 0;
-        });
-
-        console.log(filteredResults);
-
-        // const serializedData = filteredResults.map(result => {
-        //     const filePath = result.filePath;
-        //     const messages = result.messages.map(message => {
-        //         return {
-        //             source: message.source,
-        //             violation: message.ruleId,
-        //             suggestion: message.fix ? message.fix.text : null
-        //         };
-        //     });
-        //     return {
-        //         filePath,
-        //         messages
-        //     };
-        // });
-        // console.log(serializedData);
-
+        // console.log(suggestions)
+        // res.json(suggestions);
     } catch (error) {
-        console.error("Error fetching data from GitHub API:", error);
+        console.error(error);
         res.status(500).json({ error: "Internal Server Error" });
     }
-})
-
-app.get('/generateSuggestions', async function (req, res) {
-    // try {
-    //     let response = await fetch("http://127.0.0.1:8080/completion", {
-    //         method: 'POST',
-    //         headers: {
-    //             'Content-Type': 'application/json'
-    //         },
-    //         body: JSON.stringify({
-    //             prompt,
-    //             n_predict: 512,
-    //             temp: 0.2,
-    //         })
-    //     });
-
-    //     if (!response.ok) {
-    //         throw new Error(`HTTP error! status: ${response.status}`);
-    //     }
-
-    //     let data = await response.json();
-    //     res.json(data);
-    // } catch (error) {
-    //     console.error(error);
-    //     res.status(500).json({ error: "Error generating suggestions" });
-    // }
 });
 
-// Ensure the server process is terminated on application exit
+//Ensure the server process is terminated on application exit
 process.on('exit', () => {
     serverProcess.kill();
 });
@@ -467,6 +469,6 @@ process.on('SIGTERM', () => {
     process.exit();
 });
 
-app.listen(4000, function () {
-    console.log("Server running on port 4000");
-})
+app.listen(port = 4000, () => {
+    console.log(`Server running on port ${port}`);
+});
