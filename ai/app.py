@@ -3,7 +3,8 @@ from llama_cpp import Llama
 import os
 
 app = Quart(__name__)
-filename = "codellama-7b.Q5_K_M.gguf"
+# filename = "codellama-7b.Q5_K_M.gguf"
+filename = "codellama-7b-instruct.Q5_K_M.gguf"
 model_path = os.path.join(
     "C:\\Users\\Tanyalouise\\Documents\\re-code-be\\ai\\", filename
 )
@@ -11,14 +12,16 @@ model_path = os.path.join(
 # Instantiating model from the local file
 llm = Llama(
     model_path=model_path,
-    n_gpu_layers=-1
+    n_gpu_layers=-1,
 )
 
 generation_kwargs = {
-    "max_tokens": 512,
-    "stop": ["Review:"],
+    "max_tokens": 1000,
+    "stop": ["Explain", "Review:"],
     "echo": False,
-    "top_k": 1  # Greedy decoding
+    "top_k": 1,
+    "temperature": 0.7,
+    "frequency_penalty": 1
 }
 
 
@@ -29,15 +32,19 @@ async def generate():
         if not data or 'violation' not in data or 'code' not in data:
             return jsonify({'error': 'Invalid input, expected a JSON object with "violation" and "code" keys.'}), 400
 
-        system = "You are a helpful programming assistant, here to provide explanations to code violations found in JavaScript code."
-        user = f"Explain why the provide violation is a problem in the provided code snippet and how to fix the violations.\n Violation: {
-            data['violation']} \n code: {data['code']} \n Review:"
-        prompt = f"\n{system}\n\n{user}\n"
+        user = f"Violation: {data['violation']} \n code: \n {
+            data['code']} \n Review:"
+        prompt_temp = f"""
+        [INST] Explain why the provide violation is a problem in the provided code snippet and how to fix the violation.
+        Please wrap your code answer using ```javascript and ``` tags.
+        {user}
+        [/INST]
+        """
 
-        print(prompt)
+        print(prompt_temp)
 
         # Generating the response
-        response = llm(prompt, **generation_kwargs)
+        response = llm(prompt_temp, **generation_kwargs)
 
         # Waiting for and processing the response
         # Adjust according to the actual response format

@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken')
 require('dotenv').config()
 const fs = require('fs');
 const { ESLint } = require('eslint');
+const { error } = require('console');
 
 // ESLINT
 function createESLintInstance(overrideConfig) {
@@ -37,7 +38,7 @@ const overrideConfig = {
         "prefer-promise-reject-errors": "error",
 
         // Variables
-        "no-unused-vars": ["warn", { "vars": "all", "args": "after-used", "ignoreRestSiblings": false }],
+        "no-unused-vars": ["error", { "vars": "all", "args": "after-used", "ignoreRestSiblings": false }],
 
         // Stylistic Issues
         "array-bracket-spacing": ["error", "never"],
@@ -119,7 +120,7 @@ function createJWT() {
 }
 
 function getToken(header) {
-    if (header.includes("Bearer"))
+    if (header?.includes("Bearer"))
         return header.substring(7, header.length).trim();
     return null
 }
@@ -299,9 +300,17 @@ async function fetchFileContent(url, token) {
 }
 
 async function lintFiles(fileContents) {
+
+    if (typeof fileContents == 'string') {
+        const lintResult = await eslint.lintText(fileContents, { filePath: "code" });
+        console.log(lintResult)
+        return [lintResult[0]];
+    }
+
     const results = [];
     for (const file of fileContents) {
-        const lintResult = await eslint.lintText(file.content, { filePath: file.path });
+        const lintResult = await eslint.lintText(file.content, { filePath: file.name });
+        lintResult[0].name = file.name;
         results.push(lintResult[0]);
     }
     return results;
@@ -310,29 +319,76 @@ async function lintFiles(fileContents) {
 function formatLintResults(lintResults) {
     return lintResults
         .filter(result => result.messages.length > 0)
-        .map(result => ({
-            filePath: result.filePath,
-            messages: result.messages.map(message => ({
-                source: result.source ?? result.output,
-                violation: message.message,
-                ruleId: message.ruleId,
-                line: message.line,
-                column: message.column,
-                suggestion: message.fix ? message.fix.text : null
-            }))
-        }));
+        .map(result => {
+            let source = result.source ?? result.output;
+            let lines = source.split('\n');
+            let messages = result.messages;
+
+            let formattedCodeBlocks = [];
+            let currentLine = 0;
+
+            while (messages.length > 0) {
+                let message = messages.shift();
+                let startLineNumber = currentLine + 1; // Convert to one-based index
+                let errorLineNumber = message.line - 1; // Convert to zero-based index
+                let codeBlock = "";
+
+                // Extract code block from current line to error line + 1
+                for (let i = currentLine; i <= errorLineNumber + 1 && i < lines.length; i++) {
+                    codeBlock += lines[i] + '\n';
+                }
+
+                let violations = [
+                    {
+                        violation: message.message,
+                        ruleId: message.ruleId,
+                        line: message.line,
+                        column: message.column,
+                        suggestion: message.fix ? message.fix.text : null
+                    }
+                ];
+
+                // Check if the next messages have the same error line number
+                while (messages.length > 0 && messages[0].line === message.line) {
+                    let nextMessage = messages.shift();
+                    violations.push({
+                        violation: nextMessage.message,
+                        ruleId: nextMessage.ruleId,
+                        line: nextMessage.line,
+                        column: nextMessage.column,
+                        suggestion: nextMessage.fix ? nextMessage.fix.text : null
+                    });
+                }
+
+                formattedCodeBlocks.push({
+                    code: codeBlock.trim(),
+                    errorLineNumbers: violations.map(v => v.line),
+                    startLineNumber: startLineNumber,
+                    violations: violations
+                });
+
+                // Move currentLine to the line after the error line
+                currentLine = errorLineNumber + 2;
+            }
+
+            return {
+                name: result.name,
+                codeBlocks: formattedCodeBlocks
+            };
+        });
 }
 
-async function generateSuggestions(data) {
+
+async function generateSuggestions({ violation, code, recommendation }) {
     const response = await fetch("http://127.0.0.1:8000/generate", {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            violation: data?.violation,
-            code: data?.code,
-            recommendation: data?.recommendation
+            violation: violation,
+            code: code,
+            recommendation: recommendation
         })
     });
 
@@ -343,47 +399,66 @@ async function generateSuggestions(data) {
     return response.json();
 }
 
-app.get('/getCode', async (req, res) => {
+function extractCodeBlocks(text) {
+    const codeBlockRegex = /```(?:[^\n]*)\n([^`]+)```/g; // Capture the content inside triple backticks, ignoring optional language identifiers
+    const matches = [];
+    let match;
+
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+        matches.push(match[1].trim()); // Push the captured content without backticks and trim whitespace
+    }
+
+    return matches; // Return an array of matched code blocks without backticks
+}
+
+function removeCodeBlocksFromSuggestion(suggestion) {
+    const codeBlockRegex = /```[^`]+```/g; // Regular expression to match code blocks enclosed in triple backticks
+    return suggestion.replace(codeBlockRegex, ''); // Replace code blocks with an empty string
+}
+
+
+app.post('/reviewCode', async (req, res) => {
     const authHeader = req.get("Authorization");
-    if (!authHeader) {
-        return res.status(400).json({ error: "Authorization header is required" });
-    }
-
     const token = getToken(authHeader);
-    if (!token) {
-        return res.status(401).json({ error: "Invalid token" });
-    }
 
-    const { repo, owner } = req.query;
-    if (!repo || !owner) {
-        return res.status(400).json({ error: "The repo name and owner name are required!" });
+    const { repo, owner, code } = req.body;
+    const type = req.query.type;
+
+    if ((type == "git")) {
+        if (!repo || !owner) return res.status(400).json({ error: "The repo name and owner name are required!" });
+        if (!authHeader) return res.status(400).json({ error: "Authorization header is required" });
+        if (!token) return res.status(401).json({ error: "Invalid token" });
+    } else if (type == "manual" && (!code)) {
+        return res.status(400).json({ error: "JavasScript code is required!" });
     }
 
     try {
-        const files = await fetchRepoFiles(repo, owner, token);
-        const fileContents = await Promise.all(files.map(file => fetchFileContent(file.url, token).then(content => ({ path: file.path, content }))));
+        let fileContents
+        if (type == "git") {
+            const files = await fetchRepoFiles(repo, owner, token);
+            fileContents = await Promise.all(files.map(file => fetchFileContent(file.url, token).then(content => ({ name: file.path, content }))));
+        } else {
+            fileContents = code;
+        }
 
         const lintResults = await lintFiles(fileContents);
         const serializedData = formatLintResults(lintResults);
-        const mlData = serializedData.map(data => {
-            return {
-                code: data.messages[0].source,
-                violation: data.messages[0].violation,
-                recommendation: data.messages[0].suggestion
+
+        for (const data of serializedData) {
+            for (const codeBlock of data.codeBlocks) {
+                for (const violation of codeBlock.violations) {
+                    const suggestion = await generateSuggestions({
+                        code: codeBlock.code,
+                        violation: violation,
+                        recommendation: violation.suggestion
+                    });
+                    violation.suggestion = removeCodeBlocksFromSuggestion(suggestion.review);
+                    codeBlock.correctedCode = extractCodeBlocks(suggestion.review)
+                }
             }
-        });
-
-        let suggestions = [];
-
-        for (const data of mlData) {
-            console.log(data)
-            const suggestion = await generateSuggestions(data);
-            console.log(suggestion.content);
-            suggestions.push(suggestion);
         }
 
-        // console.log(suggestions)
-        res.json(suggestions);
+        res.json(serializedData)
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Internal Server Error" });
