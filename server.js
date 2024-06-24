@@ -107,7 +107,7 @@ function createJWT() {
         iat: Math.floor(Date.now() / 1000) - 60,
 
         //JWT expiration time (10 minute maximum)
-        exp: Math.floor(Date.now() / 1000) + (10 * 60),
+        exp: Math.floor(Date.now() / 1000) + (5 * 60),
 
         //GitHub App's client ID
         iss: process.env.CLIENT_ID

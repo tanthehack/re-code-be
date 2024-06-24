@@ -8,3 +8,4 @@
 - [x] prepare the responses for the fe
 - [x] send the responses
 - [ ] find a way to send the status of the llm while its running to the fe
+- [ ] fix the weird git hub jwt generation thing
