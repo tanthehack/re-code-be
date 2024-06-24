@@ -1,9 +1,11 @@
-- [ ] Github login
-- [ ] Getting the source code from the frontend
-- [ ] Check if the code is "clean"
-- [ ] Lint the code
-- [ ] Generate llm prompt
-- [ ] send llm prompt
+- [x] Github login
+- [x] Getting the source code from the frontend
+- [x] Check if the code is "clean"
+- [x] Lint the code
+- [x] Generate llm prompt
+- [x] send llm prompt
 - [ ] recieve llm status, and responses
-- [ ] prepare the responses for the fe
-- [ ] send the responses
+- [x] prepare the responses for the fe
+- [x] send the responses
+- [ ] find a way to send the status of the llm while its running to the fe
+- [ ] fix the weird git hub jwt generation thing
